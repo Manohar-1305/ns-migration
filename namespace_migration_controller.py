@@ -5,7 +5,7 @@ import os
 if "KUBERNETES_SERVICE_HOST" in os.environ:
     config.load_incluster_config()  # Running inside a pod
 else:
-    config.load_kube_config() 
+    config.load_kube_config()
 
 api = client.CustomObjectsApi()
 core_api = client.CoreV1Api()
@@ -16,7 +16,7 @@ CRD_VERSION = "v1"
 CRD_PLURAL = "namespacemigrations"
 
 def migrate_namespace(source_ns, target_ns):
-    print(f"🚀 Starting migration from {source_ns} to {target_ns}...")
+    print(f"\U0001F680 Starting migration from {source_ns} to {target_ns}...")
 
     # Ensure target namespace exists
     try:
@@ -35,17 +35,27 @@ def migrate_namespace(source_ns, target_ns):
     services = core_api.list_namespaced_service(source_ns).items
     for svc in services:
         svc.metadata.namespace = target_ns
-        svc.metadata.resource_version = None
+        svc.metadata.resource_version = None  # Reset resource version
+
+        # Remove clusterIP to allow automatic assignment
+        if svc.spec.cluster_ip:
+            svc.spec.cluster_ip = None
+        if svc.spec.clusterIPs:
+            svc.spec.clusterIPs = None
+        
         core_api.create_namespaced_service(target_ns, svc)
 
     # Migrate ConfigMaps
     configmaps = core_api.list_namespaced_config_map(source_ns).items
     for cm in configmaps:
+        if cm.metadata.name == "kube-root-ca.crt":
+            continue  # Skip default Kubernetes ConfigMap
+        
         cm.metadata.namespace = target_ns
         cm.metadata.resource_version = None
         core_api.create_namespaced_config_map(target_ns, cm)
 
-    print(f"✅ Migration completed from {source_ns} to {target_ns}")
+    print(f"\u2705 Migration completed from {source_ns} to {target_ns}")
 
 def watch_migrations():
     w = watch.Watch()
