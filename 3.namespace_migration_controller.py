@@ -1,6 +1,7 @@
 from kubernetes import client, config, watch
 
-config.load_kube_config()
+# Use in-cluster configuration
+config.load_incluster_config()
 
 api = client.CustomObjectsApi()
 core_api = client.CoreV1Api()
