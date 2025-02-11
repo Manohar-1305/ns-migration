@@ -6,7 +6,7 @@ from kubernetes.client.exceptions import ApiException
 if "KUBERNETES_SERVICE_HOST" in os.environ:
     config.load_incluster_config()  # Running inside a pod
 else:
-    config.load_kube_config() 
+    config.load_kube_config()
 
 api = client.CustomObjectsApi()
 core_api = client.CoreV1Api()
@@ -24,7 +24,7 @@ def migrate_namespace(source_ns, target_ns):
         core_api.create_namespace(client.V1Namespace(metadata=client.V1ObjectMeta(name=target_ns)))
         print(f"✅ Created namespace: {target_ns}")
     except ApiException as e:
-        if e.status == 409:  # Namespace already exists
+        if e.status == 409:
             print(f"⚠️ Namespace {target_ns} already exists, skipping creation.")
         else:
             raise
@@ -33,33 +33,16 @@ def migrate_namespace(source_ns, target_ns):
     deployments = apps_api.list_namespaced_deployment(source_ns).items
     for deploy in deployments:
         deploy.metadata.namespace = target_ns
-        deploy.metadata.resource_version = None  # Remove old version info
+        deploy.metadata.resource_version = None
 
         try:
             apps_api.create_namespaced_deployment(target_ns, deploy)
             print(f"✅ Deployment {deploy.metadata.name} migrated successfully.")
+            apps_api.delete_namespaced_deployment(deploy.metadata.name, source_ns)
+            print(f"🗑️  Deleted Deployment {deploy.metadata.name} from {source_ns}")
         except ApiException as e:
-            if e.status == 409:
-                print(f"⚠️ Deployment {deploy.metadata.name} already exists in {target_ns}, skipping.")
-            else:
-                print(f"❌ Error migrating Deployment {deploy.metadata.name}: {e}")
-                raise
-
-    # Migrate Services
-    services = core_api.list_namespaced_service(source_ns).items
-    for svc in services:
-        svc.metadata.namespace = target_ns
-        svc.metadata.resource_version = None
-
-        try:
-            core_api.create_namespaced_service(target_ns, svc)
-            print(f"✅ Service {svc.metadata.name} migrated successfully.")
-        except ApiException as e:
-            if e.status == 409:
-                print(f"⚠️ Service {svc.metadata.name} already exists in {target_ns}, skipping.")
-            else:
-                print(f"❌ Error migrating Service {svc.metadata.name}: {e}")
-                raise
+            print(f"❌ Error migrating Deployment {deploy.metadata.name}: {e}")
+            raise
 
     # Migrate ConfigMaps
     configmaps = core_api.list_namespaced_config_map(source_ns).items
@@ -70,14 +53,45 @@ def migrate_namespace(source_ns, target_ns):
         try:
             core_api.create_namespaced_config_map(target_ns, cm)
             print(f"✅ ConfigMap {cm.metadata.name} migrated successfully.")
+            core_api.delete_namespaced_config_map(cm.metadata.name, source_ns)
+            print(f"🗑️  Deleted ConfigMap {cm.metadata.name} from {source_ns}")
         except ApiException as e:
-            if e.status == 409:
-                print(f"⚠️ ConfigMap {cm.metadata.name} already exists in {target_ns}, skipping.")
-            else:
-                print(f"❌ Error migrating ConfigMap {cm.metadata.name}: {e}")
-                raise
+            print(f"❌ Error migrating ConfigMap {cm.metadata.name}: {e}")
+            raise
 
-    print(f"🎉 Migration completed from {source_ns} to {target_ns}")
+    # Migrate Secrets
+    secrets = core_api.list_namespaced_secret(source_ns).items
+    for secret in secrets:
+        secret.metadata.namespace = target_ns
+        secret.metadata.resource_version = None
+
+        try:
+            core_api.create_namespaced_secret(target_ns, secret)
+            print(f"✅ Secret {secret.metadata.name} migrated successfully.")
+            core_api.delete_namespaced_secret(secret.metadata.name, source_ns)
+            print(f"🗑️  Deleted Secret {secret.metadata.name} from {source_ns}")
+        except ApiException as e:
+            print(f"❌ Error migrating Secret {secret.metadata.name}: {e}")
+            raise
+
+    # Delete namespace if empty
+    try:
+        resources_left = (
+            len(core_api.list_namespaced_pod(source_ns).items) +
+            len(core_api.list_namespaced_config_map(source_ns).items) +
+            len(core_api.list_namespaced_secret(source_ns).items) +
+            len(apps_api.list_namespaced_deployment(source_ns).items)
+        )
+
+        if resources_left == 0:
+            core_api.delete_namespace(source_ns)
+            print(f"✅ Namespace {source_ns} deleted successfully.")
+        else:
+            print(f"⚠️ Namespace {source_ns} still contains resources, not deleted.")
+    except ApiException as e:
+        print(f"❌ Error deleting namespace {source_ns}: {e}")
+
+    print(f"🎉 Migration and cleanup completed from {source_ns} to {target_ns}")
 
 def watch_migrations():
     w = watch.Watch()
