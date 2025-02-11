@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: namespace-migration-controller
+  namespace: kube-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: namespace-migration
+  template:
+    metadata:
+      labels:
+        app: namespace-migration
+    spec:
+      serviceAccountName: namespace-migration-sa
+      containers:
+      - name: controller
+        image: myregistry/namespace-migration-controller:latest
+        imagePullPolicy: Always
