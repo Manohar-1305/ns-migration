@@ -1,6 +1,11 @@
 from kubernetes import client, config, watch
+import os
 
-config.load_kube_config()
+# Automatically use in-cluster config if inside a pod, otherwise use local kubeconfig
+if "KUBERNETES_SERVICE_HOST" in os.environ:
+    config.load_incluster_config()  # Running inside a pod
+else:
+    config.load_kube_config() 
 
 api = client.CustomObjectsApi()
 core_api = client.CoreV1Api()
