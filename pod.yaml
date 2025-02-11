@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: namespace-migration-pod
+  namespace: kube-system
+  labels:
+    app: namespace-migration
+spec:
+  serviceAccountName: namespace-migration-sa
+  containers:
+    - name: controller
+      image: manoharshetty507/namespace-migration-controller:latest
+      imagePullPolicy: Always
