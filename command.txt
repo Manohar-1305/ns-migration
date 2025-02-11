@@ -1,2 +1,5 @@
 docker build -t manoharshetty507/namespace-migration-controller:latest .
+sudo docker tag manoharshetty507/namespace-migration-controller:latest manoharshetty507/namespace-migration-controller:latest
 docker push manoharshetty507/namespace-migration-controller:latest
+
+1. Create 
