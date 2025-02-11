@@ -1,22 +1,33 @@
 from kubernetes import client, config, watch
 import os
 
-# Automatically use in-cluster config if inside a pod, otherwise use local kubeconfig
-if "KUBERNETES_SERVICE_HOST" in os.environ:
-    config.load_incluster_config()  # Running inside a pod
-else:
-    config.load_kube_config()
+try:
+    # Automatically detect if running in a cluster or locally
+    if "KUBERNETES_SERVICE_HOST" in os.environ:
+        config.load_incluster_config()  # Running inside a pod
+        print("✅ Loaded in-cluster Kubernetes config")
+    else:
+        config.load_kube_config()  # Running locally
+        print("✅ Loaded local kubeconfig")
 
-api = client.CustomObjectsApi()
-core_api = client.CoreV1Api()
-apps_api = client.AppsV1Api()
+    api = client.CustomObjectsApi()
+    core_api = client.CoreV1Api()
+    apps_api = client.AppsV1Api()
+    
+    print("✅ Kubernetes client initialized")
+
+except Exception as e:
+    print(f"⚠️ Warning: Could not load Kubernetes configuration: {e}")
+    api = None
+    core_api = None
+    apps_api = None
 
 CRD_GROUP = "example.com"
 CRD_VERSION = "v1"
 CRD_PLURAL = "namespacemigrations"
 
 def migrate_namespace(source_ns, target_ns):
-    print(f"\U0001F680 Starting migration from {source_ns} to {target_ns}...")
+    print(f"🚀 Starting migration from {source_ns} to {target_ns}...")
 
     # Ensure target namespace exists
     try:
@@ -31,6 +42,16 @@ def migrate_namespace(source_ns, target_ns):
         deploy.metadata.resource_version = None  # Remove old version info
         apps_api.create_namespaced_deployment(target_ns, deploy)
 
+    # Migrate ConfigMaps 
+    configmaps = core_api.list_namespaced_config_map(source_ns).items
+    for cm in configmaps:
+        if cm.metadata.name == "kube-root-ca.crt":
+            continue  # Skip default Kubernetes ConfigMap
+        
+        cm.metadata.namespace = target_ns
+        cm.metadata.resource_version = None
+        core_api.create_namespaced_config_map(target_ns, cm)
+    
     # Migrate Services
     services = core_api.list_namespaced_service(source_ns).items
     for svc in services:
@@ -44,20 +65,14 @@ def migrate_namespace(source_ns, target_ns):
             svc.spec.clusterIPs = None
         
         core_api.create_namespaced_service(target_ns, svc)
-
-    # Migrate ConfigMaps
-    configmaps = core_api.list_namespaced_config_map(source_ns).items
-    for cm in configmaps:
-        if cm.metadata.name == "kube-root-ca.crt":
-            continue  # Skip default Kubernetes ConfigMap
-        
-        cm.metadata.namespace = target_ns
-        cm.metadata.resource_version = None
-        core_api.create_namespaced_config_map(target_ns, cm)
-
-    print(f"\u2705 Migration completed from {source_ns} to {target_ns}")
+    
+    print(f"✅ Migration completed from {source_ns} to {target_ns}")
 
 def watch_migrations():
+    if not api:
+        print("❌ Kubernetes API client is not initialized. Exiting.")
+        return
+    
     w = watch.Watch()
     for event in w.stream(api.list_cluster_custom_object, CRD_GROUP, CRD_VERSION, CRD_PLURAL):
         migration = event['object']
