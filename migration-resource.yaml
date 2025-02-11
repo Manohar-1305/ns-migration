@@ -1,0 +1,9 @@
+kubectl apply -f - <<EOF
+apiVersion: example.com/v1
+kind: NamespaceMigration
+metadata:
+  name: migrate-test
+spec:
+  sourceNamespace: dev-ns
+  targetNamespace: prod-ns
+EOF
