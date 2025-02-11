@@ -1,2 +1,2 @@
-docker build -t myregistry/namespace-migration-controller:latest .
-docker push myregistry/namespace-migration-controller:latest
+docker build -t manoharshetty507/namespace-migration-controller:latest .
+docker push manoharshetty507/namespace-migration-controller:latest
