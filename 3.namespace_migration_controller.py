@@ -2,9 +2,9 @@ from kubernetes import client, config, watch
 import os
 from kubernetes.client.exceptions import ApiException
 
-# Automatically use in-cluster config if inside a pod, otherwise use local kubeconfig
+# Load Kubeconfig (inside cluster or local)
 if "KUBERNETES_SERVICE_HOST" in os.environ:
-    config.load_incluster_config()  # Running inside a pod
+    config.load_incluster_config()
 else:
     config.load_kube_config()
 
@@ -34,45 +34,71 @@ def migrate_namespace(source_ns, target_ns):
     for deploy in deployments:
         deploy.metadata.namespace = target_ns
         deploy.metadata.resource_version = None
-
         try:
             apps_api.create_namespaced_deployment(target_ns, deploy)
             print(f"✅ Deployment {deploy.metadata.name} migrated successfully.")
             apps_api.delete_namespaced_deployment(deploy.metadata.name, source_ns)
-            print(f"🗑️  Deleted Deployment {deploy.metadata.name} from {source_ns}")
         except ApiException as e:
             print(f"❌ Error migrating Deployment {deploy.metadata.name}: {e}")
-            raise
+
+    # Migrate StatefulSets
+    statefulsets = apps_api.list_namespaced_stateful_set(source_ns).items
+    for sts in statefulsets:
+        sts.metadata.namespace = target_ns
+        sts.metadata.resource_version = None
+        try:
+            apps_api.create_namespaced_stateful_set(target_ns, sts)
+            print(f"✅ StatefulSet {sts.metadata.name} migrated successfully.")
+            apps_api.delete_namespaced_stateful_set(sts.metadata.name, source_ns)
+        except ApiException as e:
+            print(f"❌ Error migrating StatefulSet {sts.metadata.name}: {e}")
+
+    # Migrate PVCs (Skip Local PVCs)
+    pvcs = core_api.list_namespaced_persistent_volume_claim(source_ns).items
+    for pvc in pvcs:
+        pvc_name = pvc.metadata.name
+        try:
+            # Get PVC details
+            pvc_info = core_api.read_namespaced_persistent_volume_claim(pvc_name, source_ns)
+            storage_class = pvc_info.spec.storage_class_name
+
+            # Check if PVC is using local storage
+            if storage_class is None or "local" in storage_class.lower():
+                print(f"⏭️ Skipping local PVC {pvc_name} (hostPath/local storage).")
+                continue  # Skip migration
+
+            # Migrate non-local PVC
+            pvc.metadata.namespace = target_ns
+            pvc.metadata.resource_version = None
+            core_api.create_namespaced_persistent_volume_claim(target_ns, pvc)
+            print(f"✅ PVC {pvc_name} migrated successfully.")
+            core_api.delete_namespaced_persistent_volume_claim(pvc_name, source_ns)
+        except ApiException as e:
+            print(f"❌ Error migrating PVC {pvc_name}: {e}")
 
     # Migrate ConfigMaps
     configmaps = core_api.list_namespaced_config_map(source_ns).items
     for cm in configmaps:
         cm.metadata.namespace = target_ns
         cm.metadata.resource_version = None
-
         try:
             core_api.create_namespaced_config_map(target_ns, cm)
             print(f"✅ ConfigMap {cm.metadata.name} migrated successfully.")
             core_api.delete_namespaced_config_map(cm.metadata.name, source_ns)
-            print(f"🗑️  Deleted ConfigMap {cm.metadata.name} from {source_ns}")
         except ApiException as e:
             print(f"❌ Error migrating ConfigMap {cm.metadata.name}: {e}")
-            raise
 
     # Migrate Secrets
     secrets = core_api.list_namespaced_secret(source_ns).items
     for secret in secrets:
         secret.metadata.namespace = target_ns
         secret.metadata.resource_version = None
-
         try:
             core_api.create_namespaced_secret(target_ns, secret)
             print(f"✅ Secret {secret.metadata.name} migrated successfully.")
             core_api.delete_namespaced_secret(secret.metadata.name, source_ns)
-            print(f"🗑️  Deleted Secret {secret.metadata.name} from {source_ns}")
         except ApiException as e:
             print(f"❌ Error migrating Secret {secret.metadata.name}: {e}")
-            raise
 
     # Delete namespace if empty
     try:
@@ -80,7 +106,9 @@ def migrate_namespace(source_ns, target_ns):
             len(core_api.list_namespaced_pod(source_ns).items) +
             len(core_api.list_namespaced_config_map(source_ns).items) +
             len(core_api.list_namespaced_secret(source_ns).items) +
-            len(apps_api.list_namespaced_deployment(source_ns).items)
+            len(core_api.list_namespaced_persistent_volume_claim(source_ns).items) +
+            len(apps_api.list_namespaced_deployment(source_ns).items) +
+            len(apps_api.list_namespaced_stateful_set(source_ns).items)
         )
 
         if resources_left == 0:
@@ -91,7 +119,7 @@ def migrate_namespace(source_ns, target_ns):
     except ApiException as e:
         print(f"❌ Error deleting namespace {source_ns}: {e}")
 
-    print(f"🎉 Migration and cleanup completed from {source_ns} to {target_ns}")
+    print(f"🎉 Migration completed from {source_ns} to {target_ns}")
 
 def watch_migrations():
     w = watch.Watch()
