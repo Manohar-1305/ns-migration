@@ -4,6 +4,6 @@ kind: NamespaceMigration
 metadata:
   name: migrate-test
 spec:
-  sourceNamespace: dev-ns
-  targetNamespace: prod-ns
+  sourceNamespace: source-ns
+  targetNamespace: target-ns
 EOF
