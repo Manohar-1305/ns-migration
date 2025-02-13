@@ -1,5 +1,5 @@
 
-apiVersion: example.com/v1
+apiVersion: migrations.k8s.io/v1
 kind: NamespaceMigration
 metadata:
   name: migrate-test
