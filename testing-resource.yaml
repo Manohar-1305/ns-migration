@@ -47,3 +47,37 @@ type: Opaque
 data:
   DB_USER: dXNlcm5hbWU=  # base64 encoded "username"
   DB_PASS: cGFzc3dvcmQ=  # base64 encoded "password"
+
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: stateful-pod
+  namespace: dev-ns
+spec:
+  serviceName: "stateful-service"
+  replicas: 1  # Change this for more replicas
+  selector:
+    matchLabels:
+      app: stateful-pod
+  template:
+    metadata:
+      labels:
+        app: stateful-pod
+    spec:
+      containers:
+      - name: my-container
+        image: nginx  # Change to your required image
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: data-storage
+          mountPath: /usr/share/nginx/html  # Mount path inside the container
+  volumeClaimTemplates:
+  - metadata:
+      name: data-storage
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 1Gi  # Define the persistent volume size
