@@ -16,5 +16,5 @@ spec:
       serviceAccountName: namespace-migration-sa
       containers:
       - name: controller
-        image: manoharshetty507/namespace-migration-controller:v3
+        image: manoharshetty507/migration-controller:v3
         imagePullPolicy: Always
