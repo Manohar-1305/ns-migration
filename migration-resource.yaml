@@ -6,4 +6,4 @@ metadata:
 spec:
   sourceNamespace: source-ns
   targetNamespace: target-ns
-EOF
+
