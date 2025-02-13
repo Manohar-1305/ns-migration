@@ -5,7 +5,8 @@ docker push manoharshetty507/namespace-migration-controller:latest
 1. Create namespace-migration-rbac.yaml
 2. Create 1.namespace-migration-crd.yaml
 3. 6.migration-controller.yaml
-4. pod.yaml
-5. testing-resource.yaml
-6. migration-resource.yaml
+4. migration-resource.yaml
+5. pod.yaml
+6. testing-resource.yaml
+
 
