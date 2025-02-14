@@ -12,7 +12,7 @@ api = client.CustomObjectsApi()
 core_api = client.CoreV1Api()
 apps_api = client.AppsV1Api()
 
-CRD_GROUP = "migrations.k8s.io"
+CRD_GROUP = "migrations.internal"  # Update to match CRD spec
 CRD_VERSION = "v1"
 CRD_PLURAL = "namespacemigrations"
 
