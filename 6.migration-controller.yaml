@@ -18,3 +18,6 @@ spec:
       - name: controller
         image: manoharshetty507/migration-controller:v3
         imagePullPolicy: Always
+        securityContext:
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
