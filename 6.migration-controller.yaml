@@ -1,3 +1,4 @@
+# Deployment for the Namespace Migration Controller
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -15,9 +16,6 @@ spec:
     spec:
       serviceAccountName: namespace-migration-sa
       containers:
-      - name: controller
-        image: manoharshetty507/migration-controller:v3
-        imagePullPolicy: Always
-        securityContext:
-          runAsNonRoot: true
-          allowPrivilegeEscalation: false
+        - name: controller
+          image: manoharshetty507/migration-controller:v3
+          imagePullPolicy: Always
