@@ -3,7 +3,7 @@ kind: CustomResourceDefinition
 metadata:
   name: namespacemigrations.migrations.k8s.io
 spec:
-  group: migrations.k8s.io
+  group: migrations.internal
   versions:
     - name: v1
       served: true
