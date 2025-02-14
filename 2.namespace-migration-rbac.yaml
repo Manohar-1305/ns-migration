@@ -1,3 +1,4 @@
+---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -16,7 +17,7 @@ rules:
   - apiGroups: ["apps"]
     resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
     verbs: ["get", "list", "create", "update", "delete"]
-  - apiGroups: ["example.com"]
+  - apiGroups: ["migrations.internal"]
     resources: ["namespacemigrations"]
     verbs: ["get", "list", "watch", "update"]
 
