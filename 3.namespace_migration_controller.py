@@ -1,8 +1,9 @@
+# Python Controller for Namespace Migration
 from kubernetes import client, config, watch
 import os
 from kubernetes.client.exceptions import ApiException
 
-# Load Kubernetes config (inside cluster or local)
+# Load Kubeconfig (inside cluster or local)
 if "KUBERNETES_SERVICE_HOST" in os.environ:
     config.load_incluster_config()
 else:
@@ -20,48 +21,57 @@ def delete_namespace_resources(namespace):
     """Delete all resources in the namespace before deleting it."""
     print(f"🗑️ Cleaning up resources in namespace: {namespace}")
 
+    # Delete Deployments
+    for deploy in apps_api.list_namespaced_deployment(namespace).items:
+        apps_api.delete_namespaced_deployment(deploy.metadata.name, namespace)
+        print(f"✅ Deleted Deployment: {deploy.metadata.name}")
+
+    # Delete StatefulSets
+    for sts in apps_api.list_namespaced_stateful_set(namespace).items:
+        apps_api.delete_namespaced_stateful_set(sts.metadata.name, namespace)
+        print(f"✅ Deleted StatefulSet: {sts.metadata.name}")
+
+    # Delete Pods
+    for pod in core_api.list_namespaced_pod(namespace).items:
+        core_api.delete_namespaced_pod(pod.metadata.name, namespace)
+        print(f"✅ Deleted Pod: {pod.metadata.name}")
+
+    # Delete Persistent Volume Claims (PVCs)
+    for pvc in core_api.list_namespaced_persistent_volume_claim(namespace).items:
+        core_api.delete_namespaced_persistent_volume_claim(pvc.metadata.name, namespace)
+        print(f"✅ Deleted PVC: {pvc.metadata.name}")
+
+    # Delete ConfigMaps
+    for cm in core_api.list_namespaced_config_map(namespace).items:
+        core_api.delete_namespaced_config_map(cm.metadata.name, namespace)
+        print(f"✅ Deleted ConfigMap: {cm.metadata.name}")
+
+    # Delete Secrets
+    for secret in core_api.list_namespaced_secret(namespace).items:
+        core_api.delete_namespaced_secret(secret.metadata.name, namespace)
+        print(f"✅ Deleted Secret: {secret.metadata.name}")
+
+    print(f"✅ All resources deleted from namespace {namespace}")
+
+    # Delete the namespace
     try:
-        # Delete Deployments
-        for deploy in apps_api.list_namespaced_deployment(namespace).items:
-            apps_api.delete_namespaced_deployment(deploy.metadata.name, namespace, propagation_policy="Foreground")
-            print(f"✅ Deleted Deployment: {deploy.metadata.name}")
-
-        # Delete StatefulSets
-        for sts in apps_api.list_namespaced_stateful_set(namespace).items:
-            apps_api.delete_namespaced_stateful_set(sts.metadata.name, namespace, propagation_policy="Foreground")
-            print(f"✅ Deleted StatefulSet: {sts.metadata.name}")
-
-        # Delete PVCs
-        for pvc in core_api.list_namespaced_persistent_volume_claim(namespace).items:
-            core_api.delete_namespaced_persistent_volume_claim(pvc.metadata.name, namespace, propagation_policy="Foreground")
-            print(f"✅ Deleted PVC: {pvc.metadata.name}")
-
-        # Delete ConfigMaps
-        for cm in core_api.list_namespaced_config_map(namespace).items:
-            core_api.delete_namespaced_config_map(cm.metadata.name, namespace)
-            print(f"✅ Deleted ConfigMap: {cm.metadata.name}")
-
-        # Delete Secrets
-        for secret in core_api.list_namespaced_secret(namespace).items:
-            core_api.delete_namespaced_secret(secret.metadata.name, namespace)
-            print(f"✅ Deleted Secret: {secret.metadata.name}")
-
-        # Delete Namespace
-        core_api.delete_namespace(namespace, propagation_policy="Foreground")
+        core_api.delete_namespace(namespace)
         print(f"✅ Namespace {namespace} deleted successfully.")
-
     except ApiException as e:
         print(f"❌ Error deleting namespace {namespace}: {e}")
 
 def migrate_namespace(source_ns, target_ns):
     print(f"🚀 Starting migration from {source_ns} to {target_ns}...")
 
+    # Ensure target namespace exists
     try:
         core_api.create_namespace(client.V1Namespace(metadata=client.V1ObjectMeta(name=target_ns)))
         print(f"✅ Created namespace: {target_ns}")
     except ApiException as e:
         if e.status == 409:
             print(f"⚠️ Namespace {target_ns} already exists, skipping creation.")
+        else:
+            raise
 
     # Migrate Deployments
     for deploy in apps_api.list_namespaced_deployment(source_ns).items:
@@ -82,24 +92,6 @@ def migrate_namespace(source_ns, target_ns):
             print(f"✅ StatefulSet {sts.metadata.name} migrated successfully.")
         except ApiException as e:
             print(f"❌ Error migrating StatefulSet {sts.metadata.name}: {e}")
-
-    # Migrate PVCs (Skip Local PVCs)
-    for pvc in core_api.list_namespaced_persistent_volume_claim(source_ns).items:
-        pvc_name = pvc.metadata.name
-        try:
-            pvc_info = core_api.read_namespaced_persistent_volume_claim(pvc_name, source_ns)
-            storage_class = pvc_info.spec.storage_class_name
-
-            if storage_class is None or "local" in storage_class.lower():
-                print(f"⏭️ Skipping local PVC {pvc_name} (hostPath/local storage).")
-                continue  # Skip migration
-
-            pvc.metadata.namespace = target_ns
-            pvc.metadata.resource_version = None
-            core_api.create_namespaced_persistent_volume_claim(target_ns, pvc)
-            print(f"✅ PVC {pvc_name} migrated successfully.")
-        except ApiException as e:
-            print(f"❌ Error migrating PVC {pvc_name}: {e}")
 
     # Migrate ConfigMaps
     for cm in core_api.list_namespaced_config_map(source_ns).items:
